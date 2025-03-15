@@ -1,7 +1,5 @@
-import pickle  # modulo para serializar objetos y enviarlos como bytes a través de los sockets
 import sys  # modulo para recibir argumentos por terminal
 from socket import socket, AF_INET, SOCK_STREAM  # Cosas necesarias para sockets TCP/IP
-
 from pyfiglet import figlet_format  # para textos bonitos por terminal
 
 """
@@ -64,6 +62,7 @@ if __name__ == '__main__':
 
     # Instanciamos un socket y nos conectamos al servidor
     with socket(AF_INET, SOCK_STREAM) as s:
+        s.setblocking(True)
         s.connect((server_ip, port))
 
         # Creamos un texto de consola con el título del juego
@@ -90,13 +89,13 @@ if __name__ == '__main__':
         por lo que para finalizar la comunicación compararemos el valor
         de la cadena
         """
-        command = ('START', {'difficulty': level, 'square': square})
+        command = f'GAME,{level},{square}'
 
         """
         Solo se pueden enviar bytes por sockets, por lo que es necesario serializar el objeto
         con el modulo pickle con el método dumps
         """
-        command_bytes: bytes = pickle.dumps(command)
+        command_bytes: bytes = str(command).encode()
 
         # Enviamos el mensaje al servidor
         s.send(command_bytes)
@@ -117,32 +116,34 @@ if __name__ == '__main__':
         """
         board = [[' - ' for _ in range(n)] for _ in range(n)]
         update_board(board)
+        """
         if square == 'X':
-            move = (int(input('X: ')), int(input('Y: ')))
-            s.send(pickle.dumps(move))
+            x = int(input('X: '))
+            y = int(input('Y: '))
+            s.send(str(f'{x},{y}').encode())
+        """
         while True:
-            #s.send(pickle.dumps(move))
-            msg, params = pickle.loads(s.recv(2048))
-            #print(f'PARAMS: {params}')
-            match msg:
+            message = s.recv(12).decode().split(',') #Mensajes siempre truncados a 12 bytes
+            print(message)
+            match message[0]:
                 case 'MOVE':
-                    coords = params['coordinates']
-                    square = params['square']
+                    x = int(message[1])
+                    y = int(message[2])
+                    square = message[3]
                     cls()
-                    update_board(board, coords, square)
-                case 'OPONNET_MOVE':
-                    coords = params['coordinates']
-                    square = params['square']
-                    cls()
-                    update_board(board, coords, square)
+                    update_board(board, (x, y), square)
+                case 'TURN':
                     move = (int(input('X: ')), int(input('Y: ')))
-                    s.send(pickle.dumps(move))
-                case 'INVALID_MOVE':
-                    pass
-                case 'END':
-                    winner = params['winner']
-                    time_taken = params['time_taken']
-                    winner = figlet_format(text=f'{winner} won!', font='slant')
+                    s.send(f'{move[0]},{move[1]}'.encode())
+                case 'INMV':
+                    cls()
+                    print(f'The square ({message[1]},{message[2]}) is taken or invalid')
+                    update_board(board)
+                case 'ENDG':
+                    winner = message[1]
+                    time_taken = message[2]
+                    msg = winner if winner == 'Tie' else f'{winner} won!'
+                    winner = figlet_format(text=msg, font='slant')
                     print(winner)
                     print(f'Time taken: {time_taken} seconds!')
                     break
