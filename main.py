@@ -21,7 +21,7 @@ def update_board(b: list[list[str]], coordinates: tuple[int, int] = None, new_sq
     :param b: El tablero, una matriz de strings
     :param coordinates: Las coordenadas del tablero donde se acutalizó una casilla
     :param new_square: El nuevo simbolo de la casilla que indican las coordenadas
-    :return:
+    :return: None
     """
 
     """
@@ -69,21 +69,28 @@ if __name__ == '__main__':
         title = figlet_format(text='Tic Tac Toe!', font='larry3d', width=90)
         print(title)
 
-        print('Please select difficulty level:')
-        print('1 - Easy')
-        print('2 - Medium')
-        level = input()
+        level = str()
+        while level != '1' and level != '2':
+            print('Please select difficulty level:')
+            print('1 = Easy')
+            print('2 = Medium')
+            level = input()
 
-        print('Select your square')
-        print('X')
-        print('O')
-        square = input()
+        square = str()
+        while square != 'X' and square != 'O':
+            print('Select your square')
+            print('X')
+            print('O')
+            square = input()
 
         """
         Para esta práctica decidimos implementar el siguiente formato de mensajes,
         el cual es una tupla con una cadena y un diccionario de la siguiente manera
         
-        ('CADENA QUE INTERPRETA EL SERVIDOR', {arg0: 'argumento', ...})
+        ('CADENA QUE INTERPRETA EL SERVIDOR','argumento1','argumento2', ... )
+        
+        A excepción de las coordenadas para tiro, las cuales se envian como un entero
+        truncado a 32 bits con signo
         
         Las respuestas del servidor tienen el mismo formato de mensajes,
         por lo que para finalizar la comunicación compararemos el valor
@@ -92,8 +99,8 @@ if __name__ == '__main__':
         command = f'GAME,{level},{square}'
 
         """
-        Solo se pueden enviar bytes por sockets, por lo que es necesario serializar el objeto
-        con el modulo pickle con el método dumps
+        Solo se pueden enviar bytes por sockets, por lo que es necesario
+        codificar la cadena con el método encode()
         """
         command_bytes: bytes = str(command).encode()
 
@@ -124,7 +131,7 @@ if __name__ == '__main__':
         """
         while True:
             message = s.recv(12).decode().split(',') #Mensajes siempre truncados a 12 bytes
-            print(message)
+            #print(message)
             match message[0]:
                 case 'MOVE':
                     x = int(message[1])
@@ -133,11 +140,28 @@ if __name__ == '__main__':
                     cls()
                     update_board(board, (x, y), square)
                 case 'TURN':
-                    move = (int(input('X: ')), int(input('Y: ')))
-                    s.send(f'{move[0]},{move[1]}'.encode())
+                    x = None
+                    y = None
+                    are_integers = False
+                    while not are_integers:
+                        try:
+                            x = int(input('X: '))
+                            y = int(input('Y: '))
+                            are_integers = True
+                        except ValueError:
+                            print('Enter a number')
+                            are_integers = False
+                    """
+                    Es importante truncar los bytes de un mensaje para que no se leea más de un mensaje
+                    a la vez con el método recv
+                    """
+                    assert s.send(x.to_bytes(length=32, signed=True)) == 32 #Verificar que si se envian 32 bytes al servidor
+                    assert s.send(y.to_bytes(length=32, signed=True)) == 32
+                    #s.send(f'{move[0]},{move[1]}'.encode())
                 case 'INMV':
                     cls()
-                    print(f'The square ({message[1]},{message[2]}) is taken or invalid')
+                    msg = 'out of range' if message[1] == 'NORANGE' else 'taken'
+                    print(f'The square is {msg}')
                     update_board(board)
                 case 'ENDG':
                     winner = message[1]
